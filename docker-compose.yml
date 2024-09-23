@@ -6,48 +6,45 @@ services:
   # a queue and later dequeued and launched by dagster-daemon.
   dagster_etl_webserver:
     build:
-      context: .
-      dockerfile: ./Dockerfile_dagster
+      context: ./etl/dagster
+      dockerfile: Dockerfile
     entrypoint:
       - dagster-webserver
       - -h
       - "0.0.0.0"
       - -p
       - "3000"
+      - -w
+      - workspace.yaml
     container_name: dagster_etl_webserver
     expose:
       - "3000"
     ports:
       - "3000:3000"
-    environment:
-      DAGSTER_POSTGRES_USER: "${POSTGRES_USER}"
-      DAGSTER_POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
-      DAGSTER_POSTGRES_DB: "${POSTGRES_DB}"
-      DAGSTER_POSTGRES_HOST: "${POSTGRES_HOST}"
+    env_file:
+      - ./etl/.env
     volumes: # Make docker client accessible so we can terminate containers from the webserver
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp/io_manager_storage:/tmp/io_manager_storage
+      - ./etl/dagster:/app/dagster  # Mount the dagster code
     networks:
       - dagster_etl_network
     depends_on:
       - docker_example_user_code
-      
+
   # This service runs the dagster-daemon process, which is responsible for taking runs
   # off of the queue and launching them, as well as creating runs from schedules or sensors.
   dagster_etl_daemon:
     build:
-      context: .
-      dockerfile: ./Dockerfile_dagster
+      context: ./etl/dagster
+      dockerfile: Dockerfile
     entrypoint:
       - dagster-daemon
       - run
     container_name: dagster_etl_daemon
     restart: on-failure
-    environment:
-      DAGSTER_POSTGRES_USER: "${POSTGRES_USER}"
-      DAGSTER_POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
-      DAGSTER_POSTGRES_DB: "${POSTGRES_DB}"
-      DAGSTER_POSTGRES_HOST: "${POSTGRES_HOST}"
+    env_file:
+      - ./etl/.env
     volumes: # Make docker client accessible so we can launch containers using host docker
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp/io_manager_storage:/tmp/io_manager_storage
@@ -64,19 +61,36 @@ services:
       # webserver.
   docker_example_user_code:
     build:
-      context: .
-      dockerfile: ./Dockerfile_user_code
+      context: ./etl/repository
+      dockerfile: Dockerfile
     container_name: docker_example_user_code
     image: docker_example_user_code_image
     restart: always
-    environment:
-      DAGSTER_POSTGRES_USER: "${POSTGRES_USER}"
-      DAGSTER_POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
-      DAGSTER_POSTGRES_DB: "${POSTGRES_DB}"
-      DAGSTER_POSTGRES_HOST: "${POSTGRES_HOST}"
-      DAGSTER_CURRENT_IMAGE: "docker_example_user_code_image"
+    env_file:
+      - ./etl/.env
     networks:
       - dagster_etl_network
+    volumes:  # Mount the code as a volume for hot-reloading
+      - ./etl/repository:/app/repository
+ 
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    restart: always
+    env_file:
+      - ./api/.env
+    ports:
+      - "5000:5000"
+      - "5678:5678"  # VS Code debugger port
+    networks:
+      - dagster_etl_network
+    volumes:  # Mount the code as a volume for hot-reloading
+      - ./api:/app/api
+    environment:
+      - FLASK_ENV=development
+      - FLASK_DEBUG=1
+      - PYTHONUNBUFFERED=1  # Required to get all the debug logs in real time
 
 networks:
   dagster_etl_network:

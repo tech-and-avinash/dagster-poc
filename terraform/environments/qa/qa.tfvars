@@ -1,0 +1,5 @@
+resource_group_name  = "qa-resource-group"
+storage_account_name = "qastorageaccount"
+event_subscription_name = "qa-blob-created-subscription"
+webhook_endpoint_url = "https://qa.example.com/webhook"
+location = "East US"

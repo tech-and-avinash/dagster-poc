@@ -1,0 +1,5 @@
+resource_group_name  = "prod-resource-group"
+storage_account_name = "prodstorageaccount"
+event_subscription_name = "prod-blob-created-subscription"
+webhook_endpoint_url = "https://prod.example.com/webhook"
+location = "West US"
